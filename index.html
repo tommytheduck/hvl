@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MCK Vamp Visualizer</title>
+  <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.2/lib/anime.min.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #060608;
+      --panel: rgba(12, 10, 16, 0.74);
+      --line: rgba(245, 238, 255, 0.18);
+      --text: #f7f2ff;
+      --muted: #a89bb7;
+      --purple: #a100ff;
+      --magenta: #ff2e8a;
+      --red: #ff173d;
+      --acid: #c5ff2e;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+    @font-face {
+      font-family: "Noto Sans";
+      src: url("./NotoSans-Regular.ttf") format("truetype");
+    }
+    html,
+    body {
+      min-height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--ink);
+      color: var(--text);
+      font-family: "Noto Sans", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      display: grid;
+      place-items: stretch;
+      --bass-zoom: 1;
+      --shake-x: 0px;
+      --shake-y: 0px;
+      --tilt: 0deg;
+      --pit-y: 0px;
+      --pit-squash: 1;
+    }
+
+    canvas {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      background:
+        radial-gradient(circle at 50% 35%, rgba(161, 0, 255, 0.38), transparent 32rem),
+        radial-gradient(circle at 76% 70%, rgba(255, 23, 61, 0.32), transparent 26rem),
+        linear-gradient(120deg, #050506 0%, #220633 44%, #09070d 100%);
+      filter: contrast(1.08) saturate(1.2);
+    }
+
+    .mosh-pit {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .mosh-pit {
+      top: auto;
+      height: 38vh;
+      overflow: hidden;
+      z-index: 2;
+      opacity: 0.95;
+      transform: translateY(calc(4vh + var(--pit-y))) scale(calc(1 + (var(--bass-zoom) - 1) * 3)) scaleY(var(--pit-squash));
+      transform-origin: bottom center;
+      filter: contrast(1.35);
+    }
+
+    .mosh-pit i {
+      position: absolute;
+      left: var(--x);
+      bottom: -3vh;
+      width: var(--w);
+      height: var(--h);
+      border-radius: 44% 44% 12% 12%;
+      background:
+        radial-gradient(circle at 50% 14%, #030305 0 22%, transparent 23%),
+        linear-gradient(180deg, rgba(9, 7, 12, 0.98), rgba(0, 0, 0, 0.86));
+      box-shadow:
+        0 0 18px rgba(255, 46, 138, 0.58),
+        0 -18px 28px rgba(161, 0, 255, 0.38),
+        calc(var(--dir) * 10px) -12px 0 -4px rgba(197, 255, 46, 0.34);
+      transform-origin: bottom center;
+      animation: pitMove var(--speed) steps(3, end) infinite;
+    }
+
+    .mosh-pit i::before,
+    .mosh-pit i::after {
+      content: "";
+      position: absolute;
+      top: 34%;
+      width: 80%;
+      height: 14%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(5, 5, 7, 0.98), rgba(255, 46, 138, 0.72), rgba(5, 5, 7, 0.98));
+      transform-origin: 10% 50%;
+    }
+
+    .mosh-pit i::before {
+      left: -52%;
+      rotate: calc(var(--dir) * -34deg);
+    }
+
+    .mosh-pit i::after {
+      right: -52%;
+      rotate: calc(var(--dir) * 34deg);
+    }
+
+    .stage {
+      position: relative;
+      z-index: 2;
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: 1fr;
+      padding: 0;
+      transform-origin: center;
+      transform: translate3d(var(--shake-x), var(--shake-y), 0) scale(var(--bass-zoom));
+      will-change: transform;
+    }
+
+    .centerpiece {
+      position: relative;
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+      padding: 0;
+    }
+
+    .glyph-ring {
+      position: absolute;
+      width: min(68vmin, 560px);
+      aspect-ratio: 1;
+      border: 2px solid rgba(245, 238, 255, 0.18);
+      border-radius: 50%;
+      filter: drop-shadow(0 0 34px rgba(161, 0, 255, 0.55));
+    }
+
+    .glyph-ring::before,
+    .glyph-ring::after {
+      content: "";
+      position: absolute;
+      inset: 8%;
+      border: 2px solid transparent;
+      border-top-color: rgba(255, 46, 138, 0.58);
+      border-bottom-color: rgba(197, 255, 46, 0.38);
+      border-radius: inherit;
+    }
+
+    .glyph-ring::after {
+      inset: 20%;
+      border-top-color: rgba(161, 0, 255, 0.65);
+      border-bottom-color: rgba(255, 23, 61, 0.42);
+    }
+
+    .lyric-box {
+      position: relative;
+      width: 100vw;
+      max-width: 100vw;
+      min-height: clamp(190px, 32vh, 330px);
+      display: grid;
+      place-items: center;
+      text-align: center;
+      isolation: isolate;
+      padding-inline: clamp(16px, 4vw, 56px);
+      margin-inline: auto;
+    }
+
+    .lyric-shadow {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      color: rgba(161, 0, 255, 0.12);
+      font-size: clamp(3rem, 14vw, 11rem);
+      font-weight: 950;
+      line-height: 0.82;
+      text-transform: uppercase;
+      filter: blur(1px);
+      transform: skewY(-4deg);
+      user-select: none;
+    }
+
+    .lyric-current {
+      position: relative;
+      width: 100%;
+      max-width: min(92vw, 1120px);
+      margin: 0 auto;
+      color: var(--text);
+      font-size: clamp(2rem, 7.4vw, 7rem);
+      font-weight: 950;
+      line-height: 0.88;
+      letter-spacing: 0;
+      text-align: center;
+      text-wrap: balance;
+      overflow-wrap: normal;
+      text-transform: uppercase;
+      transform-origin: center center;
+      text-shadow:
+        0 0 18px rgba(161, 0, 255, 0.95),
+        7px 0 rgba(255, 46, 138, 0.85),
+        -7px 0 rgba(197, 255, 46, 0.6),
+        0 12px 44px rgba(0, 0, 0, 0.88);
+      filter: contrast(1.25);
+    }
+
+    .lyric-current::before,
+    .lyric-current::after {
+      content: attr(data-text);
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      opacity: 0.62;
+      overflow: hidden;
+      color: var(--magenta);
+      transform: translateX(-10px);
+      clip-path: polygon(0 0, 100% 0, 100% 45%, 0 38%);
+      pointer-events: none;
+    }
+
+    .lyric-current::after {
+      color: var(--acid);
+      transform: translateX(10px);
+      clip-path: polygon(0 54%, 100% 45%, 100% 100%, 0 100%);
+    }
+
+    body.beat .lyric-current::before {
+      animation: rgbTearA 190ms steps(2, end);
+    }
+
+    body.beat .lyric-current::after {
+      animation: rgbTearB 160ms steps(2, end);
+    }
+
+    .phrase-line {
+      display: block;
+      width: 100%;
+      white-space: normal;
+      text-align: center;
+      text-wrap: balance;
+    }
+
+    .mini-line {
+      display: block;
+      width: 100%;
+      margin-top: 0.16em;
+      color: var(--acid);
+      font-size: 0.38em;
+      line-height: 1;
+      text-align: center;
+    }
+
+    .slash {
+      display: inline-block;
+      color: var(--magenta);
+      transform: skewX(-12deg);
+    }
+
+    .lyric-next {
+      display: none;
+    }
+
+    .pulse-word {
+      display: inline-block;
+      color: var(--acid);
+      text-shadow:
+        0 0 16px rgba(197, 255, 46, 0.8),
+        0 0 34px rgba(255, 46, 138, 0.55);
+    }
+
+    @keyframes pitMove {
+      0% { transform: translateX(-14px) skewX(-4deg) scaleY(0.92); }
+      25% { transform: translateX(18px) skewX(7deg) scaleY(1.12); }
+      50% { transform: translateX(-8px) skewX(-9deg) scaleY(0.98); }
+      75% { transform: translateX(24px) skewX(5deg) scaleY(1.16); }
+      100% { transform: translateX(-14px) skewX(-4deg) scaleY(0.92); }
+    }
+
+    @keyframes rgbTearA {
+      0% { transform: translate(-18px, -3px) skewX(-16deg); clip-path: polygon(0 0, 100% 0, 100% 22%, 0 34%); }
+      50% { transform: translate(24px, 5px) skewX(13deg); clip-path: polygon(0 28%, 100% 18%, 100% 58%, 0 46%); }
+      100% { transform: translate(-10px, 0) skewX(0); clip-path: polygon(0 0, 100% 0, 100% 45%, 0 38%); }
+    }
+
+    @keyframes rgbTearB {
+      0% { transform: translate(22px, 6px) skewX(18deg); clip-path: polygon(0 62%, 100% 48%, 100% 72%, 0 86%); }
+      50% { transform: translate(-26px, -4px) skewX(-12deg); clip-path: polygon(0 42%, 100% 56%, 100% 100%, 0 94%); }
+      100% { transform: translate(10px, 0) skewX(0); clip-path: polygon(0 54%, 100% 45%, 100% 100%, 0 100%); }
+    }
+
+    .play-button {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      z-index: 8;
+      width: clamp(86px, 15vw, 138px);
+      aspect-ratio: 1;
+      translate: -50% -50%;
+      border: 2px solid rgba(197, 255, 46, 0.78);
+      border-radius: 50%;
+      background: rgba(4, 4, 7, 0.58);
+      box-shadow:
+        0 0 26px rgba(197, 255, 46, 0.45),
+        0 0 58px rgba(255, 46, 138, 0.3);
+      cursor: pointer;
+      transition: opacity 160ms ease, scale 160ms ease;
+    }
+
+    .play-button::before {
+      content: "";
+      position: absolute;
+      left: 40%;
+      top: 50%;
+      translate: -50% -50%;
+      width: 0;
+      height: 0;
+      border-top: clamp(22px, 4vw, 34px) solid transparent;
+      border-bottom: clamp(22px, 4vw, 34px) solid transparent;
+      border-left: clamp(34px, 6vw, 54px) solid var(--acid);
+      filter: drop-shadow(0 0 18px rgba(197, 255, 46, 0.9));
+    }
+
+    .play-button.is-playing {
+      opacity: 0.18;
+      scale: 0.78;
+    }
+
+    .play-button:focus-visible {
+      outline: 3px solid var(--magenta);
+      outline-offset: 3px;
+    }
+
+    audio {
+      display: none;
+    }
+
+    @media (max-width: 720px) {
+      .stage {
+        padding: 0;
+      }
+
+      .lyric-current {
+        max-width: 94vw;
+        font-size: clamp(1.9rem, 10vw, 4.8rem);
+      }
+
+    }
+  </style>
+</head>
+<body>
+  <canvas id="visualizer" aria-hidden="true"></canvas>
+  <div class="mosh-pit" id="moshPit" aria-hidden="true">
+    <i style="--x: 2%; --w: 8vw; --h: 24vh; --speed: .54s; --dir: -1"></i>
+    <i style="--x: 9%; --w: 7vw; --h: 19vh; --speed: .48s; --dir: 1"></i>
+    <i style="--x: 16%; --w: 10vw; --h: 29vh; --speed: .62s; --dir: -1"></i>
+    <i style="--x: 25%; --w: 7vw; --h: 22vh; --speed: .43s; --dir: 1"></i>
+    <i style="--x: 32%; --w: 12vw; --h: 32vh; --speed: .58s; --dir: -1"></i>
+    <i style="--x: 43%; --w: 8vw; --h: 21vh; --speed: .39s; --dir: 1"></i>
+    <i style="--x: 50%; --w: 11vw; --h: 34vh; --speed: .52s; --dir: -1"></i>
+    <i style="--x: 60%; --w: 7vw; --h: 20vh; --speed: .46s; --dir: 1"></i>
+    <i style="--x: 67%; --w: 10vw; --h: 30vh; --speed: .6s; --dir: -1"></i>
+    <i style="--x: 76%; --w: 8vw; --h: 23vh; --speed: .41s; --dir: 1"></i>
+    <i style="--x: 84%; --w: 12vw; --h: 31vh; --speed: .57s; --dir: -1"></i>
+    <i style="--x: 94%; --w: 7vw; --h: 18vh; --speed: .44s; --dir: 1"></i>
+  </div>
+
+  <main class="stage" id="stage">
+    <section class="centerpiece" aria-live="polite">
+      <div class="glyph-ring" id="ring"></div>
+      <div class="lyric-box">
+        <div class="lyric-shadow" id="shadowText">MCK</div>
+        <h1 class="lyric-current" id="currentLyric" data-text="Press play">Press play</h1>
+      </div>
+    </section>
+  </main>
+
+  <button class="play-button" id="playButton" type="button" aria-label="Play"></button>
+  <audio id="track" preload="auto" src="GhetXogLaiThik-MCK.mp3"></audio>
+<!--  -->
+  <script>
+    const embeddedSrt = "1\n00:00:18,768 --> 00:00:21,632\ntao kh\u00f4ng bao gi\u1edd mu\u1ed1n nghe \u0111\u00e2u ch\u00fang m\u00e0y cap cap\n\n2\n00:00:21,632 --> 00:00:24,551\npurple Haze m\u00f9i purple haze g\u1ecdi l\u00e0 kh\u00e9t l\u1eb9t\n\n3\n00:00:24,551 --> 00:00:27,595\nfuck tao \u0111\u00f3i r b\u1ee5ng tao l\u00e9p k\u1eb9p\n\n4\n00:00:27,595 --> 00:00:30,707\ntao ch\u1ec9 \u0111i ngang qua now she wet wet\n\n5\n00:00:30,707 --> 00:00:33,314\nnh\u1eafn cho anh l\u00e0 pls give me a chance\n\n6\n00:00:33,314 --> 00:00:36,186\nanh kh\u00f4ng th\u00edch l\u00e0 ph\u1ea3i l\u00e0m vi\u1ec7c qua middleman\n\n7\n00:00:36,186 --> 00:00:39,093\nanh th\u00edch k\u00ed cho fan c\u1ee7a anh b\u1eb1ng b\u00fat bi \u0111en\n\n8\n00:00:39,093 --> 00:00:40,407\nblown her back out\n\n9\n00:00:40,407 --> 00:00:42,085\nfill her coochie\n\n10\n00:00:42,085 --> 00:00:45,119\nI love that juicy pussy give it to me\n\n11\n00:00:45,119 --> 00:00:47,163\nb\u1ecdn ch\u00f3 n\u00e0y gh\u00e9t xong r l\u1ea1i th\u00edch \u00e0\n\n12\n00:00:47,163 --> 00:00:48,516\n\u0111\u00e9o mu\u1ed1n gi\u1ea3i th\u00edch\n\n13\n00:00:48,516 --> 00:00:49,984\ngh\u00e9t xong r l\u1ea1i th\u00edch \u00e0\n\n14\n00:00:49,984 --> 00:00:51,208\n\u0111\u00e9o mu\u1ed1n gi\u1ea3i th\u00edch\n\n15\n00:00:51,208 --> 00:00:53,010\ngh\u00e9t xong r l\u1ea1i th\u00edch \u00e0\n\n16\n00:00:53,010 --> 00:00:54,252\n\u0111\u00e9o mu\u1ed1n gi\u1ea3i th\u00edch\n\n17\n00:00:54,252 --> 00:00:55,806\ngh\u00e9t xong r l\u1ea1i th\u00edch \u00e0\n\n18\n00:00:55,806 --> 00:00:57,107\nkh\u00f4ng c\u1ea7n ph\u1ea3i gi\u1ea3i th\u00edch\n\n19\n00:00:57,107 --> 00:01:00,218\ntao th\u00edch ng\u1eafm g\u00e1i nh\u01b0ng em n\u00e0o vibe m\u1edbi \u0111\u01b0\u1ee3c tao follow\n\n20\n00:01:00,218 --> 00:01:03,196\nth\u1ea5y m\u00ecnh qu\u00e1 l\u00e0 bay nh\u01b0ng \u0111\u00e9o hi\u1ec3u \u0111\u1ea5y l\u00e0 do \u0111\u00e2u\n\n21\n00:01:03,196 --> 00:01:06,026\nMCKeyyyy n\u00f3 \u0111\u00e3 tr\u1edf l\u1ea1i r\u1ed3i \u0111\u00e9o c\u00f2n lo \u00e2u\n\n22\n00:01:06,026 --> 00:01:07,669\ntao set the trend\n\n23\n00:01:07,669 --> 00:01:09,175\nch\u00fang m\u00e0y follow\n\n24\n00:01:09,520 --> 00:01:10,988\ntao v\u1eabn \u0111ang tr\u00ean top\n\n25\n00:01:10,988 --> 00:01:12,345\nc\u00f9ng th\u00e0nh raw \u0111i xem van gogh\n\n26\n00:01:12,345 --> 00:01:13,776\nb\u1ecdn tao l\u00e0 vietnamese Hot\n\n27\n00:01:15,499 --> 00:01:17,018\nrick owens mob\n\n28\n00:01:17,018 --> 00:01:18,463\ntequila shots\n\n29\n00:01:18,463 --> 00:01:21,545\nvamp vamp vamp vamp vamp vamp vamp vamp\n\n30\n00:01:21,546 --> 00:01:22,941\nCH\u00daNG N\u00d3 GH\u00c9T XONG L\u1ea0I TH\u00cdCH \u00c0KKK?\n\n31\n00:01:22,941 --> 00:01:24,195\n\u0110\u00c9O C\u1ea6N PH\u1ea2I GI\u1ea2I TH\u00cdCH\n\n32\n00:01:24,195 --> 00:01:25,919\nGH\u00c9T XONG L\u1ea0I TH\u00cdCH \u00c0KKK?\n\n33\n00:01:25,919 --> 00:01:27,324\n\u0110\u00c9O C\u1ea6N PH\u1ea2I GI\u1ea2I TH\u00cdCH 🔥󠅘󠅕󠅜󠅜󠅟󠄐󠅣󠅙󠅢\n\n34\n00:01:27,324 --> 00:01:28,861\nGH\u00c9T XONG L\u1ea0I TH\u00cdCH \u00c0KKK? 😀😃😄😁😆\n\n35\n00:01:28,861 --> 00:01:30,169\n\u0110\u00c9O C\u1ea6N PH\u1ea2I GI\u1ea2I TH\u00cdCH 😅😂🤣\n\n36\n00:01:30,169 --> 00:01:31,882\nGH\u00c9T XONG L\u1ea0I TH\u00cdCH \u00c0KKK? 🥲😊😇\n\n37\n00:01:31,882 --> 00:01:33,685\n\u0110\u00c9O C\u1ea6N PH\u1ea2I GI\u1ea2I TH\u00cdCH 🙂🥲🙃\n\n38\n00:01:33,686 --> 00:01:35,685\n 😉😌😍";
+    let lyricCues = parseSrt(embeddedSrt);
+
+    const audio = document.querySelector("#track");
+    const canvas = document.querySelector("#visualizer");
+    const ctx = canvas.getContext("2d");
+    const currentLyric = document.querySelector("#currentLyric");
+    const shadowText = document.querySelector("#shadowText");
+    const ring = document.querySelector("#ring");
+    const playButton = document.querySelector("#playButton");
+
+    let audioContext;
+    let analyser;
+    let source;
+    let frequencyData;
+    let currentIndex = -1;
+    let rafId;
+    let bassLevel = 0;
+    let impactKick = 0;
+    let lastHardBeat = 0;
+
+    function fitCanvas() {
+      const ratio = Math.min(window.devicePixelRatio || 1, 1.15);
+      canvas.width = Math.floor(window.innerWidth * ratio);
+      canvas.height = Math.floor(window.innerHeight * ratio);
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    }
+
+    function setupAudioGraph() {
+      if (audioContext) return;
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 128;
+      analyser.smoothingTimeConstant = 0.68;
+      frequencyData = new Uint8Array(analyser.frequencyBinCount);
+      source = audioContext.createMediaElementSource(audio);
+      source.connect(analyser);
+      analyser.connect(audioContext.destination);
+    }
+
+    function formatTime(value) {
+      if (!Number.isFinite(value)) return "0:00";
+      const minutes = Math.floor(value / 60);
+      const seconds = Math.floor(value % 60).toString().padStart(2, "0");
+      return `${minutes}:${seconds}`;
+    }
+
+    function parseSrtTime(value) {
+      const match = value.trim().match(/(\d+):(\d+):(\d+),(\d+)/);
+      if (!match) return 0;
+      const [, hours, minutes, seconds, millis] = match.map(Number);
+      return hours * 3600 + minutes * 60 + seconds + millis / 1000;
+    }
+
+    function splitCaption(text) {
+      const clean = text.replace(/\s+/g, " ").trim();
+      const words = clean.split(" ");
+      if (words.length <= 5 || clean.length <= 34) {
+        return { text: clean, sub: "" };
+      }
+
+      const preferredBreaks = ["à", "r", "là", "nhưng", "xong", "vamp", "phải"];
+      let splitAt = Math.ceil(words.length / 2);
+      for (let i = 3; i < words.length - 2; i += 1) {
+        if (preferredBreaks.includes(words[i].toLowerCase())) {
+          splitAt = i + 1;
+          break;
+        }
+      }
+
+      return {
+        text: words.slice(0, splitAt).join(" "),
+        sub: words.slice(splitAt).join(" ")
+      };
+    }
+
+    function cueTag(text) {
+      const lower = text.toLowerCase();
+      if (lower.includes("vamp")) return "VAMP";
+      if (lower.includes("giải thích")) return "NO EXPLAIN";
+      if (lower.includes("ghét") || lower.includes("thích")) return "SWITCH";
+      if (lower.includes("purple")) return "PURPLE";
+      if (lower.includes("trend")) return "TREND";
+      if (lower.includes("top")) return "TOP";
+      if (lower.includes("mck")) return "MCK";
+      return "RAGE";
+    }
+
+    function parseSrt(srt) {
+      const blocks = srt.trim().split(/\n\s*\n/);
+      return blocks.map((block) => {
+        const lines = block.split(/\n/).map((line) => line.trim()).filter(Boolean);
+        const timeLine = lines.find((line) => line.includes("-->"));
+        if (!timeLine) return null;
+
+        const [start, end] = timeLine.split("-->").map((value) => value.trim());
+        const text = lines.slice(lines.indexOf(timeLine) + 1).join(" ");
+        const split = splitCaption(text);
+        const fullText = `${split.text} ${split.sub}`.trim();
+
+        return {
+          time: parseSrtTime(start),
+          end: parseSrtTime(end),
+          text: split.text,
+          sub: split.sub,
+          tag: cueTag(fullText),
+          hook: /vamp|giải thích|thích àkkk|ghét xong/i.test(fullText)
+        };
+      }).filter(Boolean);
+    }
+
+    function emphasize(text) {
+      return text
+        .split(" ")
+        .map((word) => /vamp|purple|haze|ghét|thích|mck|trend|top|giải|àkkk/i.test(word)
+          ? `<span class="pulse-word">${word}</span>`
+          : word)
+        .join(" ");
+    }
+
+    function renderCue(entry) {
+      const main = emphasize(entry.text);
+      const sub = entry.sub ? `<span class="mini-line">${emphasize(entry.sub)}</span>` : "";
+      return `<span class="phrase-line">${main}</span>${sub}`;
+    }
+
+    function triggerImpact(power = 1) {
+      impactKick = Math.min(1, impactKick + 0.12 * power);
+    }
+
+    function setLyric(index) {
+      if (index === currentIndex) return;
+      currentIndex = index;
+
+      const entry = lyricCues[index];
+      const upcoming = lyricCues[index + 1];
+      const isHook = entry.hook || /vamp|giải thích|thích àkkk/i.test(`${entry.text} ${entry.sub || ""}`);
+
+      currentLyric.innerHTML = renderCue(entry);
+      currentLyric.dataset.text = `${entry.text} ${entry.sub || ""}`;
+      shadowText.textContent = entry.tag || (isHook ? "VAMP" : "MCK");
+
+      document.body.classList.add("beat");
+      window.setTimeout(() => document.body.classList.remove("beat"), 180);
+
+      anime.remove([currentLyric, shadowText, ring]);
+      anime.timeline({ easing: "easeOutExpo" })
+        .add({
+          targets: currentLyric,
+          opacity: [0, 1, 0.72, 1],
+          translateY: [isHook ? -120 : 90, 0],
+          translateX: [isHook ? anime.random(-140, 140) : anime.random(-54, 54), anime.random(-18, 18), 0],
+          scaleX: [isHook ? 1.85 : 1.35, 0.78, 1.08, 1],
+          scaleY: [0.48, 1.35, 0.92, 1],
+          skewX: [0, 0],
+          filter: ["blur(8px) contrast(2.8)", "blur(0px) contrast(1.35)"],
+          duration: isHook ? 300 : 390
+        })
+        .add({
+          targets: currentLyric.querySelectorAll(".pulse-word"),
+          color: ["#c5ff2e", "#ff2e8a", "#f7f2ff", "#c5ff2e"],
+          translateY: [-34, 16, 0],
+          translateX: [() => anime.random(-18, 18), 0],
+          scale: [2.1, 0.72, 1],
+          rotate: [() => anime.random(-5, 5), 0],
+          delay: anime.stagger(18),
+          duration: 390
+        }, "-=250")
+        ;
+
+      anime({
+        targets: ring,
+        rotate: isHook ? "+=260" : "+=150",
+        scale: [isHook ? 1.38 : 1.12, 1],
+        borderColor: isHook ? "rgba(197, 255, 46, 0.7)" : "rgba(255, 46, 138, 0.36)",
+        duration: isHook ? 520 : 780,
+        easing: "easeOutElastic(1, .55)"
+      });
+
+      anime({
+        targets: shadowText,
+        opacity: [1, 0.18],
+        translateX: [anime.random(-60, 60), 0],
+        translateY: [anime.random(-22, 22), 0],
+        scale: [isHook ? 1.5 : 1.22, 1],
+        skewX: [anime.random(-20, 20), 0],
+        duration: isHook ? 440 : 560,
+        easing: "easeOutQuad"
+      });
+
+      triggerImpact(isHook ? 2.4 : 1.2);
+    }
+
+    function updateLyricFromTime() {
+      const t = audio.currentTime;
+      let nextIndex = -1;
+
+      for (let i = 0; i < lyricCues.length; i += 1) {
+        if (t >= lyricCues[i].time) nextIndex = i;
+      }
+
+      if (nextIndex >= 0) setLyric(nextIndex);
+      if (nextIndex < 0 && currentIndex !== -1) {
+        currentIndex = -1;
+        currentLyric.textContent = "Press play";
+        currentLyric.dataset.text = "Press play";
+      }
+    }
+
+    function drawFallbackBars(width, height, now) {
+      const bars = 72;
+      for (let i = 0; i < bars; i += 1) {
+        const x = (i / bars) * width;
+        const wave = Math.sin(now * 0.002 + i * 0.34) * 0.5 + 0.5;
+        const barHeight = 30 + wave * 180;
+        ctx.fillStyle = i % 3 === 0 ? "rgba(197,255,46,.36)" : "rgba(161,0,255,.42)";
+        ctx.fillRect(x, height - barHeight, width / bars - 3, barHeight);
+      }
+    }
+
+    function updateCamera(rawBass) {
+      impactKick *= 0.9;
+      const heat = Math.min(1, rawBass * 1.25 + impactKick);
+      const shake = heat * heat * 16;
+      const x = (Math.random() - 0.5) * shake;
+      const y = (Math.random() - 0.5) * shake;
+      const tilt = 0;
+      const zoom = 1 + heat * 0.045 + impactKick * 0.025;
+
+      document.body.style.setProperty("--bass-zoom", zoom.toFixed(3));
+      document.body.style.setProperty("--shake-x", `${x.toFixed(1)}px`);
+      document.body.style.setProperty("--shake-y", `${y.toFixed(1)}px`);
+      document.body.style.setProperty("--tilt", `${tilt.toFixed(2)}deg`);
+      document.body.style.setProperty("--pit-y", `${(heat * -12 + Math.random() * heat * 6).toFixed(1)}px`);
+      document.body.style.setProperty("--pit-squash", (1 + heat * 0.12).toFixed(3));
+
+      if (heat > 0.68 && performance.now() - lastHardBeat > 260) {
+        lastHardBeat = performance.now();
+        triggerImpact(0.8 + heat);
+      }
+    }
+
+    function drawVisualizer(now = 0) {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      ctx.clearRect(0, 0, width, height);
+
+      const gradient = ctx.createRadialGradient(width / 2, height * 0.44, 20, width / 2, height * 0.44, Math.max(width, height) * 0.72);
+      gradient.addColorStop(0, "rgba(161, 0, 255, 0.22)");
+      gradient.addColorStop(0.42, "rgba(255, 23, 61, 0.12)");
+      gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+
+      if (analyser) {
+        analyser.getByteFrequencyData(frequencyData);
+        const bars = frequencyData.length;
+        const centerX = width / 2;
+        const centerY = height / 2;
+        const baseRadius = Math.min(width, height) * 0.2;
+        const bass = frequencyData.slice(0, 10).reduce((sum, value) => sum + value, 0) / (10 * 255);
+        bassLevel = bassLevel * 0.82 + bass * 0.18;
+        updateCamera(bassLevel);
+
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.rotate(now * 0.00045 + bassLevel * 0.35);
+        for (let i = 0; i < bars; i += 2) {
+          const value = frequencyData[i] / 255;
+          const angle = (i / bars) * Math.PI * 2;
+          const length = 42 + value * Math.min(width, height) * 0.38 + bassLevel * 70;
+          const inner = baseRadius + bassLevel * 18;
+          const x1 = Math.cos(angle) * inner;
+          const y1 = Math.sin(angle) * inner;
+          const x2 = Math.cos(angle) * (inner + length);
+          const y2 = Math.sin(angle) * (inner + length);
+          ctx.strokeStyle = i % 4 === 0
+            ? `rgba(197, 255, 46, ${0.18 + value * 0.75})`
+            : `rgba(${170 + value * 85}, ${20 + value * 40}, ${255 - value * 120}, ${0.18 + value * 0.7})`;
+          ctx.lineWidth = 1 + value * 5 + bassLevel * 2;
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      } else {
+        bassLevel = bassLevel * 0.96 + 0.05;
+        updateCamera(bassLevel);
+        drawFallbackBars(width, height, now);
+      }
+
+      updateLyricFromTime();
+
+      rafId = requestAnimationFrame(drawVisualizer);
+    }
+
+    async function playTrack() {
+      setupAudioGraph();
+      if (audioContext.state === "suspended") await audioContext.resume();
+      await audio.play();
+      playButton.classList.add("is-playing");
+      playButton.setAttribute("aria-label", "Pause");
+      if (!rafId) drawVisualizer();
+    }
+
+    function pauseTrack() {
+      audio.pause();
+      playButton.classList.remove("is-playing");
+      playButton.setAttribute("aria-label", "Play");
+    }
+
+    playButton.addEventListener("click", async () => {
+      try {
+        if (audio.paused) {
+          await playTrack();
+        } else {
+          pauseTrack();
+        }
+      } catch (error) {
+        currentLyric.textContent = "Audio blocked";
+        currentLyric.dataset.text = "Audio blocked";
+      }
+    });
+
+    audio.addEventListener("ended", () => {
+      playButton.classList.remove("is-playing");
+      playButton.setAttribute("aria-label", "Play");
+    });
+
+    window.addEventListener("resize", fitCanvas);
+    fitCanvas();
+    drawVisualizer();
+  </script>
+</body>
+</html>
